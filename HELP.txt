@@ -1,0 +1,10 @@
+Proyecto con diferentes scripts. Análisis y escaneo de red.
+
+Conceptos aplicados a la programación de los scripts:
+
+    -Programación multihilo.
+    -Listas recursivas.
+    -Diccionario por compresión
+    -Poo 
+
+
