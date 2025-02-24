@@ -59,7 +59,7 @@ En este método, se usa ténicas de programación multihilo (futures), para agil
 
 =================================================================================================================================================================================================
 
-        nueva_funcion_banner():
+        services_scan():
 
 Esta función implementa la lectura del banner del servicio para poder descubrir que version de usa.
 La función devuelve un {Diccionario} con el numero de puerto, y el banner que obtiene del intento de 
