@@ -38,10 +38,11 @@ class NetworkAnalyzer:
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
                 s.settimeout(self.timeout)
                 s.connect((ip,port))
-                return (ip, True)
+                return (port, True)
             
         except (socket.timeout, socket.error):
-            return (ip, False)
+            return (port, False)
+            
             
     def  hosts_scan_arp(self):
         """
@@ -57,10 +58,7 @@ class NetworkAnalyzer:
         for _ , received in response:
             hosts_up.append(received.psrc)
         return hosts_up
-         
-        
-        
-    
+            
     
     def hosts_scan(self, scan_ports=(135,445,139)):
         """
@@ -86,6 +84,30 @@ class NetworkAnalyzer:
                     hosts_up.append(future.result()[0])
                 
         return hosts_up
+    
+    
+    def ports_scan(self, port_range = (0,1000)):
+        """
+        Escanea todos los puertos en un rango (x-y) de un host determinado.
+        Esta función No es capaz de detectar QUÉ servicio NI SU VERSIÓN. No tiene en cuenta los banners.
+        
+        
+        """
+        active_hosts = self.hosts_scan_arp()
+        all_open_ports = {}
+        with ThreadPoolExecutor(max_workers = 100) as executor:
+            for ip in active_hosts:
+                futures=[]
+                for port in tqdm(range(*port_range), desc=f'Escanenado puertos de {ip}'):
+                    #UTIL: (range(*port_range)) --> el asterisco * desempaqueta y pone inicio y fin al range (0,1000), proporcionado por el parametro port_range()
+                    future = executor.submit(self._scan_host_sockets,ip,port)
+                    futures.append(future)
+                open_ports = [future.result()[0] for future in futures if future.result()[1]]
+                if open_ports:
+                    all_open_ports[ip] = open_ports
+                    
+        return all_open_ports
+    
        
        
     def _scan_hosts_scapy(self,ip, scan_ports = (135,445,139)):
@@ -115,10 +137,21 @@ class NetworkAnalyzer:
         console = Console()
         table = Table(show_header=True, header_style='bold magenta')
         
-        if data_type == 'hosts' :
+        
+        #Pretty print para los Hosts:
+        if data_type == 'hosts':
             table.add_column('Hosts up' , style='bold green')
             for host in data:
                 table.add_row(host, end_section = True)
+        #Pretty print para los puertos:     
+        elif data_type == 'ports':
+            table.add_column('IP Adress' ,style = 'bold green')
+            table.add_column('Open Ports', style = 'bold blue')
+            for ip, ports in data.items():
+                ports_str = ', '.join(map(str, ports))
+                table.add_row(ip, ports_str, end_section=True)
+                
+            
                 
         console.print(table)
         
