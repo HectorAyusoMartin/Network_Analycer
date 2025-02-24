@@ -43,7 +43,25 @@ class NetworkAnalyzer:
         except (socket.timeout, socket.error):
             return (ip, False)
             
-            
+    def  hosts_scan_arp(self):
+        """
+        Descubre Hosts a través de la ténica ARP-SCAN.
+        Es poco invaisvo.
+        
+        """    
+        hosts_up = []
+        network = ipaddress.ip_network(self.network_range, strict=False)
+        #utilizamos scapy para componer un paquete ARP para enviar a todas las IP dentro del rango proporcionado, para ver si nos responde diciendo que tiene la dirección MAC asociada.
+        arp_request = Ether(dst='ff:ff:ff:ff:ff:ff') / ARP(pdst=str(network))
+        response, _ = tqdm(srp(arp_request, timeout=self.timeout, iface_hint=str(network[1]), verbose=0), desc='Escaneando con ARP')
+        for _ , received in response:
+            hosts_up.append(received.psrc)
+        return hosts_up
+         
+        
+        
+    
+    
     def hosts_scan(self, scan_ports=(135,445,139)):
         """
         En python, ipadress es el paquete por excelencia para la manipulación de Direcciones Ip, y otros trabajos relaccionados.
