@@ -109,7 +109,6 @@ class NetworkAnalyzer:
         return all_open_ports
     
        
-       
     def _scan_hosts_scapy(self,ip, scan_ports = (135,445,139)):
         """
         Método interno para escanear hosts en una red, pero haciendo uso de la libreria Scapy. La tupla que se pasa como parámetro, con 3 puertos, es porque esos tres puertos, casi siempre
@@ -127,7 +126,49 @@ class NetworkAnalyzer:
                 return (ip, True)
         return (ip, False)
     
+    
+    def get_banner(self, ip, port):
         
+        """
+        Recibe una direccion ip, y un puerto, y analiza el banner del servicio para descubrir su version
+        """
+        
+        try:
+            #abrimos un socket
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                s.settimeout = (self.timeout)
+                s.connect((ip, port))
+                #interensate: enviamos información al servicio, de manera que el servicio igual nos responde con mas info (banner)
+                s.send(b'Hello\r\n')
+                #devolvemos(return) los primeros 1024 bytes que nos responda
+                return s.recv(1014).decode().strip()
+        except Exception as e:
+                return str(e)
+        
+        
+    def services_scan(self, port_range=(0,1000)):
+        """
+        Devuelve el nombre y versión de un servicio en un puerto determinado
+        
+        """
+        active_hosts = self.hosts_scan()
+        service_info = {}
+        with ThreadPoolExecutor(max_workers=100) as executor:
+            for ip in active_hosts:
+                futures=[]
+                #Creamos un diccionario. Clave: Puerto, Vlor: Banner del servicio
+                service_info[ip] = {}
+                for port in tqdm(range(*port_range),desc=f'Obteniendo banners en {ip}'):
+                    future = executor.submit(self.get_banner,ip,port)
+                    futures.append((future,port))
+                    
+                for future, port in futures:
+                    result = future.result()
+                    if result and 'time out' not in result and 'refused' not in result and 'No route to host' not in result:
+                        service_info[ip][port] = result
+        return service_info
+                        
+    
      
     def pretty_pint(self, data, data_type='hosts'):
         """
@@ -151,6 +192,15 @@ class NetworkAnalyzer:
                 ports_str = ', '.join(map(str, ports))
                 table.add_row(ip, ports_str, end_section=True)
                 
+        elif data_type == 'services':
+            table.add_column('Dirección IP', style='Bold blue')
+            table.add_column('Puerto', style='bold green')
+            table.add_column('Banner del Servicio', style='bold yellow')
+            for ip, services in data.items():
+                for port, service in services.items():
+                    table.add_row(ip, str(port), service, end_section=True)
+                    
+            
             
                 
         console.print(table)

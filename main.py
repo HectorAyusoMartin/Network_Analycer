@@ -13,10 +13,15 @@ if __name__ == '__main__':
     
     #Pruebas reconocimiento de puertos de un Host
     
-    ports_up = analyzer.ports_scan()
-    analyzer.pretty_pint(ports_up, data_type='ports')
+        #ports_up = analyzer.ports_scan()
+        #analyzer.pretty_pint(ports_up, data_type='ports')
     
     #=========================================
+    
+    #Reconociendo Banners
+    
+    services = analyzer.services_scan()
+    analyzer.pretty_pint(services, data_type='services')
     
     
     
