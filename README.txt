@@ -67,6 +67,10 @@ conexión con el.
 
 =================================================================================================================================================================================================
 
+        discover_public_smb():
+
+Esta función sirve para descubrir y hacer enumeración de archivos y directorios compartidos en los sistemas Windows,
+haciendo uso del protocolo SMB.
 
 
 

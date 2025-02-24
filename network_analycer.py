@@ -8,6 +8,7 @@ from rich.console import Console
 from rich.table import Table
 from scapy.all import *
 import logging
+from smb.SMBConnection import SMBConnection
 
 #Desactivamos la salida de Warning para Scapy
 logging.getLogger('Scapy.runtime').setLevel(logging.ERROR)
@@ -26,8 +27,10 @@ class NetworkAnalyzer:
     def _scan_host_sockets(self, ip, port):
         
         """
-        Métoodo de prueba, con la idea de generar a través de Sockets un cliente, y probar a conectarse al servidor directamente haciendo uso de esta libreria. Así, en teoría, sabriamos
-        si hay hosts visibles. Si nos conectamos, aunque no haya ningún serivicio corriendo en ese puerto, nos debería responder, y a través de esa respuesta entender que ese host
+        Métoodo de prueba, con la idea de generar a través de Sockets un cliente, y probar a conectarse 
+        al servidor directamente haciendo uso de esta libreria. Así, en teoría, sabriamos
+        si hay hosts visibles. Si nos conectamos, aunque no haya ningún serivicio corriendo
+        en ese puerto, nos debería responder, y a través de esa respuesta entender que ese host
         se encuentra activo.
         
         Como su nombre indica, este método hace uso de Sockets para su propósito.
@@ -62,7 +65,8 @@ class NetworkAnalyzer:
     
     def hosts_scan(self, scan_ports=(135,445,139)):
         """
-        En python, ipadress es el paquete por excelencia para la manipulación de Direcciones Ip, y otros trabajos relaccionados.
+        En python, ipadress es el paquete por excelencia para la manipulación de Direcciones Ip,
+        y otros trabajos relaccionados.
         La función escanea todos los hosts que estan UP en un rango determinado de red.
         
         
@@ -89,7 +93,8 @@ class NetworkAnalyzer:
     def ports_scan(self, port_range = (0,1000)):
         """
         Escanea todos los puertos en un rango (x-y) de un host determinado.
-        Esta función No es capaz de detectar QUÉ servicio NI SU VERSIÓN. No tiene en cuenta los banners.
+        Esta función No es capaz de detectar QUÉ servicio NI SU VERSIÓN.
+        No tiene en cuenta los banners.
         
         
         """
@@ -111,8 +116,10 @@ class NetworkAnalyzer:
        
     def _scan_hosts_scapy(self,ip, scan_ports = (135,445,139)):
         """
-        Método interno para escanear hosts en una red, pero haciendo uso de la libreria Scapy. La tupla que se pasa como parámetro, con 3 puertos, es porque esos tres puertos, casi siempre
-        estan corriendo en una máquina windows, y para evitar que el sustema Win no responda con la bandera RST
+        Método interno para escanear hosts en una red, pero haciendo uso de la libreria Scapy. 
+        La tupla que se pasa como parámetro, con 3 puertos, es porque esos tres puertos, casi siempre
+        estan corriendo en una máquina windows, y para evitar que el sustema Win no responda con 
+        la bandera RST
         
         """
         
@@ -169,6 +176,61 @@ class NetworkAnalyzer:
         return service_info
                         
     
+    def discover_public_smb(self, ip):
+        """
+        Descubre recursos de red públicos mediante el uso
+        de SMB.
+        
+        """
+        #CONFIGURACION
+        user_name = ''
+        password = ''
+        local_machine_name = 'laptop' #No es reelevante para concretar la conexión
+        server_machine_name = ip
+        
+        #DEFINIENDO EL CLIENTE
+        share_details = {}
+        try:
+            conn = SMBConnection(user_name, password, local_machine_name, server_machine_name, use_ntlm_v2=True, is_direct_tcp=True)
+            if conn.connect(ip, 445, timeout=self.timeout):
+                print(f'Conectado a {ip}')
+                for share in conn.listShares(timeout=10):
+                    if not share.isSpecial and share.name not in ['NETLOGON','SYSVOL']:
+                        try:
+                            files = conn.listPath(share.name,'/')
+                            share_details[share.name] = [file.filename for file in files if file.filenames not in ['.','..']]
+                        except Exception as es:
+                            print(f'No se ha podido acceder a {share.name} en {ip}: {e}')   
+                conn.close()           
+                
+        except Exception as e:
+            print(f'No se ha podido obtener los recursos de {ip}: {e}')
+        return ip, share_details
+        
+    
+    def scan_shares(self):
+        
+        active_hosts = self.hosts_scan()
+        all_shares = {}
+        with ThreadPoolExecutor(max_workers=100) as executor:
+            futures ={executor.submit(self.discover_public_smb, ip) : ip for ip in tqdm(active_hosts, desc='Descubriendo Recursos compartidos')}
+            for future in tqdm(futures, desc='Obteniendo recursos compartidos'):
+                ip, shares = future.result()
+                if shares:
+                    all_shares[ip] = shares
+                if shares is None:
+                    print('NO SE ENCONTRO RES DE RES')
+        return all_shares
+    
+                
+            
+        
+    
+    
+    
+    def procrastinate():
+        #TODO:
+        pass
      
     def pretty_pint(self, data, data_type='hosts'):
         """
@@ -191,17 +253,24 @@ class NetworkAnalyzer:
             for ip, ports in data.items():
                 ports_str = ', '.join(map(str, ports))
                 table.add_row(ip, ports_str, end_section=True)
-                
+        #Pretty para los servicios, los banners       
         elif data_type == 'services':
             table.add_column('Dirección IP', style='Bold blue')
             table.add_column('Puerto', style='bold green')
             table.add_column('Banner del Servicio', style='bold yellow')
             for ip, services in data.items():
                 for port, service in services.items():
-                    table.add_row(ip, str(port), service, end_section=True)
-                    
-            
-            
+                    table.add_row(ip, str(port), service, end_section=True)           
+        #Pretty para los SMB 
+        elif data_type == 'shares':
+            for ip, shares in data.items():
+                table = Table(show_header=True, header_style='bold magenta')
+                table.add_column('Direccion IP' , style='bold green')
+                table.add_column('Recurso Compartido', style='bold blue')
+                table.add_column('File', style='bold yellow')
+                for share, files in shares.items():
+                    files_str= ' ,'.join(files)
+                    table.add_row(ip,share,files_str,end_section=True)
                 
         console.print(table)
         
